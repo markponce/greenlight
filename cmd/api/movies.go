@@ -59,7 +59,7 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 		CreatedAt: time.Now(),
 		Title:     "Casablance",
 		Year:      2001,
-		RunTime:   102,
+		Runtime:   102,
 		Genres:    []string{},
 		Vesion:    1,
 	}
