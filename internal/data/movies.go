@@ -2,6 +2,7 @@ package data
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/lib/pq"
@@ -40,30 +41,112 @@ type MovieModel struct {
 }
 
 func (m *MovieModel) Insert(movie *Movie) error {
-
+	// query statement
 	query := `
 
 		INSERT INTO movies(title, year, runtime, genres)
 		VALUES ($1,$2,$3,$4)
 		RETURNING id, created_at, version
 	`
-
+	// create slice type any for the arguments
 	args := []any{
 		movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres),
 	}
 
+	// execute statement in the db. convert args using variadics and reference to update the movie id, createdAt, version
 	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Vesion)
-
 }
 
 func (m *MovieModel) Get(id int64) (*Movie, error) {
-	return nil, nil
+	// check if less than 1 return ErrRecordNotfound
+	if id < 1 {
+		return nil, ErrRecordNotfound
+	}
+
+	// query statement
+	stmt := `
+		SELECT id, created_at, title, year, runtime, genres, version
+		from movies 
+		where id=$1
+	`
+
+	// movie variable
+	var movie Movie
+
+	// execute query to the db.
+	err := m.DB.QueryRow(stmt, id).Scan(
+		&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		pq.Array(&movie.Genres),
+		&movie.Vesion,
+	)
+
+	// check for result
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// if error is no rows return standard error ErrRecordNotfound
+			return nil, ErrRecordNotfound
+		default:
+			// return whatever error
+			return nil, err
+		}
+	}
+
+	return &movie, nil
 }
 
 func (m *MovieModel) Update(movie *Movie) error {
-	return nil
+	// update query statement
+	stmt := `
+		UPDATE movies
+		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
+		where id = $5
+		returning version
+		`
+	// create slice any for the arguments
+	args := []any{
+		movie.Title,
+		movie.Year,
+		movie.Runtime,
+		pq.Array(movie.Genres),
+		movie.ID,
+	}
+
+	return m.DB.QueryRow(stmt, args...).Scan(&movie.Vesion)
 }
 
-func (m *MovieModel) Delete(int64) error {
+func (m *MovieModel) Delete(id int64) error {
+	// if less than 1 return standard app error ErrRecordNotfound
+	if id < 1 {
+		return ErrRecordNotfound
+	}
+
+	// query statement
+	query := `
+		DELETE FROM movies
+		where id = $1
+	`
+	// execute query
+	result, err := m.DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	//check for row result
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	// if there is no result, return standard app error ErrRecordNotfound
+	if rowsAffected == 0 {
+		return ErrRecordNotfound
+	}
+
+	// deletion is successfull
 	return nil
 }
