@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -40,6 +41,10 @@ type MovieModel struct {
 	DB *sql.DB
 }
 
+func (m *MovieModel) List(*[]Movie) error {
+	return nil
+}
+
 func (m *MovieModel) Insert(movie *Movie) error {
 	// query statement
 	query := `
@@ -53,8 +58,12 @@ func (m *MovieModel) Insert(movie *Movie) error {
 		movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres),
 	}
 
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// execute statement in the db. convert args using variadics and reference to update the movie id, createdAt, version
-	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Vesion)
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Vesion)
 }
 
 func (m *MovieModel) Get(id int64) (*Movie, error) {
@@ -73,8 +82,11 @@ func (m *MovieModel) Get(id int64) (*Movie, error) {
 	// movie variable
 	var movie Movie
 
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// execute query to the db.
-	err := m.DB.QueryRow(stmt, id).Scan(
+	err := m.DB.QueryRowContext(ctx, stmt, id).Scan(
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
@@ -101,10 +113,11 @@ func (m *MovieModel) Get(id int64) (*Movie, error) {
 
 func (m *MovieModel) Update(movie *Movie) error {
 	// update query statement
+	// avoid race condition where version
 	stmt := `
 		UPDATE movies
 		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-		where id = $5
+		where id = $5 and version = $6
 		returning version
 		`
 	// create slice any for the arguments
@@ -114,9 +127,26 @@ func (m *MovieModel) Update(movie *Movie) error {
 		movie.Runtime,
 		pq.Array(movie.Genres),
 		movie.ID,
+		movie.Vesion,
 	}
 
-	return m.DB.QueryRow(stmt, args...).Scan(&movie.Vesion)
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, stmt, args...).Scan(&movie.Vesion)
+	if err != nil {
+		switch {
+		// if no updated record it means that the record has been updated already (data race condition)
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+
+	}
+
+	return nil
 }
 
 func (m *MovieModel) Delete(id int64) error {
@@ -130,8 +160,13 @@ func (m *MovieModel) Delete(id int64) error {
 		DELETE FROM movies
 		where id = $1
 	`
+
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// execute query
-	result, err := m.DB.Exec(query, id)
+	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
@@ -149,4 +184,65 @@ func (m *MovieModel) Delete(id int64) error {
 
 	// deletion is successfull
 	return nil
+}
+
+func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*Movie, error) {
+	// Construct the SQL query to retrieve all movie records.
+	query := `
+
+		SELECT id, created_at, title, year, runtime, genres, version
+		FROM movies
+		ORDER by id
+	`
+
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Use QueryContext() to execute the query. This returns a sql.Rows resultset
+	// containing the result.
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	// Importantly, defer a call to rows.Close() to ensure that the resultset is closed
+	// before GetAll() returns.
+	defer rows.Close()
+
+	// Initialize an empty slice to hold the movie data.
+	movies := []*Movie{}
+
+	// Use rows.Next to iterate through the rows in the resultset.
+	for rows.Next() {
+		var movie Movie
+
+		// Scan the values from the row into the Movie struct. Again, note that we're
+		// using the pq.Array() adapter on the genres field here.
+		err := rows.Scan(
+			&movie.ID,
+			&movie.CreatedAt,
+			&movie.Title,
+			&movie.Year,
+			&movie.Runtime,
+			pq.Array(&movie.Genres),
+			&movie.Vesion,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Add the Movie struct to the slice.
+		movies = append(movies, &movie)
+	}
+
+	// When the rows.Next() loop has finished, call rows.Err() to retrieve any error
+	// that was encountered during the iteration.
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// If everything went OK, then return the slice of movies.
+	return movies, nil
+
 }
