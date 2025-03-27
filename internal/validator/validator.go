@@ -27,7 +27,6 @@ func New() *Validator {
 
 // Valid returns true if the errors map doesn't contain any entries.
 func (v *Validator) Valid() bool {
-	log.Printf("errors: %+v", v.Errors)
 	return len(v.Errors) == 0
 }
 
