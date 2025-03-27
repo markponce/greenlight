@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/lib/pq"
@@ -186,30 +187,44 @@ func (m *MovieModel) Delete(id int64) error {
 	return nil
 }
 
-func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*Movie, error) {
+func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*Movie, Metadata, error) {
 	// Construct the SQL query to retrieve all movie records.
-	query := `
-
-		SELECT id, created_at, title, year, runtime, genres, version
-		FROM movies
-		ORDER by id
-	`
+	// Update the SQL query to include the filter conditions.
+	query := fmt.Sprintf(`
+	SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, version
+	FROM movies
+	WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
+	AND (genres @> $2 OR $2 = '{}')     
+	ORDER BY %s %s, id ASC 
+	LIMIT $3 OFFSET $4 
+	`,
+		filter.sortColumn(),
+		filter.sortDirection(),
+	)
 
 	// Create a context with a 3-second timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	args := []any{
+		title,
+		pq.Array(genres),
+		filter.limit(),
+		filter.offfset(),
+	}
+
 	// Use QueryContext() to execute the query. This returns a sql.Rows resultset
 	// containing the result.
-	rows, err := m.DB.QueryContext(ctx, query)
+	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 	// Importantly, defer a call to rows.Close() to ensure that the resultset is closed
 	// before GetAll() returns.
 	defer rows.Close()
 
 	// Initialize an empty slice to hold the movie data.
+	totalRecords := 0
 	movies := []*Movie{}
 
 	// Use rows.Next to iterate through the rows in the resultset.
@@ -219,6 +234,7 @@ func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*M
 		// Scan the values from the row into the Movie struct. Again, note that we're
 		// using the pq.Array() adapter on the genres field here.
 		err := rows.Scan(
+			&totalRecords,
 			&movie.ID,
 			&movie.CreatedAt,
 			&movie.Title,
@@ -229,7 +245,7 @@ func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*M
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 
 		// Add the Movie struct to the slice.
@@ -239,10 +255,12 @@ func (m *MovieModel) GetAll(title string, genres []string, filter Filters) ([]*M
 	// When the rows.Next() loop has finished, call rows.Err() to retrieve any error
 	// that was encountered during the iteration.
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
+	metedata := CalculateMetaData(totalRecords, filter.Page, filter.PageSize)
+
 	// If everything went OK, then return the slice of movies.
-	return movies, nil
+	return movies, metedata, nil
 
 }

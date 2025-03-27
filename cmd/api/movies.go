@@ -228,58 +228,17 @@ func (app *application) listMoviesHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	movies, err := app.models.Movies.GetAll(input.Title, input.Genres, input.Filters)
+	movies, metadata, err := app.models.Movies.GetAll(input.Title, input.Genres, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelop{"movies": movies}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelop{"movies": movies, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-
 	// Dump the contents of the input struct in a HTTP response.
 	// fmt.Fprintf(w, "%+v\n", input)
-}
-
-func (app *application) listMoviesHandlerBak(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Title  string
-		Genres []string
-		data.Filters
-	}
-
-	v := validator.New()
-
-	qs := r.URL.Query()
-
-	input.Title = app.readString(qs, "title", "")
-	input.Genres = app.readCSV(qs, "genres", []string{})
-
-	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
-
-	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
-
-	if data.ValidateFilters(v, input.Filters); !v.Valid() {
-		app.failedValidationResponse(w, r, v.Errors)
-		return
-	}
-
-	// Call the GetAll() method to retrieve the movies, passing in the various filter
-	// parameters.
-	movies, err := app.models.Movies.GetAll(input.Title, input.Genres, input.Filters)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-
-	// Send a JSON response containing the movie data.
-	err = app.writeJSON(w, http.StatusOK, envelop{"movies": movies}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
 }
