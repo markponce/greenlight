@@ -11,15 +11,16 @@ import (
 )
 
 const (
-	ScopeActivation = "activation"
+	ScopeActivation     = "activation"
+	ScopeAuthentication = "authentication"
 )
 
 type Token struct {
-	Plaintext string
-	Hash      []byte
-	UserID    int64
-	Expiry    time.Time
-	Scope     string
+	Plaintext string    `json:"token"`
+	Hash      []byte    `json:"-"`
+	UserID    int64     `json:"-"`
+	Expiry    time.Time `json:"expiry"`
+	Scope     string    `json:"-"`
 }
 
 // CREATE TABLE IF NOT EXISTS tokens (
@@ -44,7 +45,7 @@ func generateToken(userID int64, ttl time.Duration, scope string) *Token {
 
 }
 
-func ValidateTokenPlainText(v *validator.Validator, tokenPlainText string) {
+func ValidateTokenPlaintext(v *validator.Validator, tokenPlainText string) {
 	v.Check(tokenPlainText != "", "token", "must be provided")
 	v.Check(len(tokenPlainText) == 26, "token", "must be 26 bytes long")
 }

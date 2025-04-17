@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ErrRecordNotfound = errors.New("record not found")
+	ErrRecordNotFound = errors.New("record not found")
 	ErrEditConflict   = errors.New("edit conflict")
 )
 

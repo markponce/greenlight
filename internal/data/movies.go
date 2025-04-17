@@ -68,9 +68,9 @@ func (m *MovieModel) Insert(movie *Movie) error {
 }
 
 func (m *MovieModel) Get(id int64) (*Movie, error) {
-	// check if less than 1 return ErrRecordNotfound
+	// check if less than 1 return ErrRecordNotFound
 	if id < 1 {
-		return nil, ErrRecordNotfound
+		return nil, ErrRecordNotFound
 	}
 
 	// query statement
@@ -101,8 +101,8 @@ func (m *MovieModel) Get(id int64) (*Movie, error) {
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			// if error is no rows return standard error ErrRecordNotfound
-			return nil, ErrRecordNotfound
+			// if error is no rows return standard error ErrRecordNotFound
+			return nil, ErrRecordNotFound
 		default:
 			// return whatever error
 			return nil, err
@@ -151,9 +151,9 @@ func (m *MovieModel) Update(movie *Movie) error {
 }
 
 func (m *MovieModel) Delete(id int64) error {
-	// if less than 1 return standard app error ErrRecordNotfound
+	// if less than 1 return standard app error ErrRecordNotFound
 	if id < 1 {
-		return ErrRecordNotfound
+		return ErrRecordNotFound
 	}
 
 	// query statement
@@ -178,9 +178,9 @@ func (m *MovieModel) Delete(id int64) error {
 		return err
 	}
 
-	// if there is no result, return standard app error ErrRecordNotfound
+	// if there is no result, return standard app error ErrRecordNotFound
 	if rowsAffected == 0 {
-		return ErrRecordNotfound
+		return ErrRecordNotFound
 	}
 
 	// deletion is successfull

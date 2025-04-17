@@ -103,17 +103,16 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 	v := validator.New()
 
 	// validate token
-	if data.ValidateTokenPlainText(v, input.TokenPlainText); !v.Valid() {
+	if data.ValidateTokenPlaintext(v, input.TokenPlainText); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	// g
 	user, err := app.models.Users.GetForToken(data.ScopeActivation, input.TokenPlainText)
 
 	if err != nil {
 		switch {
-		case errors.Is(err, data.ErrRecordNotfound):
+		case errors.Is(err, data.ErrRecordNotFound):
 			// app.notFoundResponse(w, r)
 			v.AddError("token", "invalid or expired token")
 			app.failedValidationResponse(w, r, v.Errors)

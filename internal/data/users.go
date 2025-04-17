@@ -11,6 +11,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var AnonymousUser = &User{}
+
 type User struct {
 	ID        int64     `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -19,6 +21,11 @@ type User struct {
 	Password  password  `json:"-"`
 	Activated bool      `json:"activated"`
 	Version   int       `json:"-"`
+}
+
+// Check if a User instance is the AnonymousUser.
+func (u *User) IsAnonymous() bool {
+	return u == AnonymousUser
 }
 
 type password struct {
@@ -47,8 +54,8 @@ func (p *password) Set(plaintextPassword string) error {
 	return nil
 }
 
-func (p password) Matches() (bool, error) {
-	err := bcrypt.CompareHashAndPassword(p.hash, []byte(*p.plaintext))
+func (p password) Matches(plaintexPassword string) (bool, error) {
+	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintexPassword))
 	if err != nil {
 		switch {
 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
@@ -151,7 +158,7 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotfound
+			return nil, ErrRecordNotFound
 		default:
 			return nil, err
 		}
@@ -249,7 +256,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotfound
+			return nil, ErrRecordNotFound
 		default:
 			return nil, err
 		}
