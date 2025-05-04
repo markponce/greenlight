@@ -16,10 +16,8 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/markponce/greenlight/internal/data"
 	"github.com/markponce/greenlight/internal/mailer"
+	"github.com/markponce/greenlight/internal/vcs"
 )
-
-// Declare a string containing the application version number.
-const version = "1.0.0"
 
 // Define a config struct to hold all the configuration settings for our application.
 type config struct {
@@ -58,6 +56,10 @@ type application struct {
 	mailer *mailer.Mailer
 	wg     sync.WaitGroup
 }
+
+var (
+	version = vcs.Version()
+)
 
 func main() {
 	// Declare an instance of the config struct.
