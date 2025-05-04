@@ -32,3 +32,31 @@ db/migrations/new:
 db/migrations/up: confirm
 	@echo 'Running up migrations...'
 	migrate -path ./migrations -database ${GREENLIGHT_DB_DSN} up
+
+	# ==================================================================================== #
+# QUALITY CONTROL
+# ==================================================================================== #
+
+## tidy: tidy and vendor module dependencies, and format all .go files
+.PHONY: tidy
+tidy:
+	@echo 'Tidying module dependencies...'
+	go mod tidy
+	@echo 'Verifying and vendoring module dependencies...'
+	go mod verify
+	go mod vendor
+	@echo 'Formatting .go files...'
+	go fmt ./...
+
+# ==================================================================================== #
+# BUILD
+# ==================================================================================== #
+
+## build/api: build the cmd/api application
+.PHONY: build/api
+build/api:
+	@echo 'Building cmd/api...'
+	# go build -o=./bin/api ./cmd/api
+	# -ldflags='-s', Go linker to strip symbol tables and DWARF debugging information from the binary
+	go build -ldflags='-s' -o=./bin/api ./cmd/api
+	GOOS=linux GOARCH=amd64 go build -ldflags='-s' -o=./bin/linux_amd64/api ./cmd/api
